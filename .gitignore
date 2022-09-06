@@ -1,0 +1,6 @@
+
+gene_count_matrix.csv
+*.bed
+multiqc_report_alignment_1.html
+QC_RNA_Report.pdf
+transcript_count_matrix.csv

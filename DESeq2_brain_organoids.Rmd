@@ -262,8 +262,35 @@ attributes_ensembl[1:10,]
 
 ensembl_mitochondrial <- getBM(mart=ensembl, attributes = c("ensembl_gene_id", "chromosome_name"), filters = "chromosome_name", values="MT")
 
+### ENSEMBL ID need to be in the same format
+counts_formatted <- mutate(as.data.frame(countData), "IDs" = rownames(countData)) %>%
+  separate(IDs, ".", extra="drop") %>%
+  rename("new_IDs" = ".")
+
+
+
 #subset(m, rownames(m) %in% include_list)
-mitochondrial_counts <- subset(countData, rownames(countData) %in% ensembl_mitochondrial$ensembl_gene_id)
+mitochondrial_counts <- subset(counts_formatted, counts_formatted$new_IDs %in% ensembl_mitochondrial$ensembl_gene_id) 
+ 
+mitochondrial_counts <- mitochondrial_counts[1:(length(mitochondrial_counts)-1)]
+
+
+#plot the mitochondrial RNA counts
+library(reshape2)
+
+longData<-melt(mitochondrial_counts)
+longData<-longData[longData$value!=0,]
+
+ggplot(longData, aes(x = new_IDs, y = variable)) + 
+  geom_raster(aes(fill=value)) + 
+  scale_fill_gradient(low="grey90", high="red") +
+  labs(y="sample", x="ENSEMBL ID", title="Mitichondrial RNA analysis") +
+  theme_bw() + theme(axis.text.x=element_text(size=9, angle=90),
+                     axis.text.y=element_text(size=9),
+                     plot.title=element_text(size=11))
+
+
+
 ```
  
  

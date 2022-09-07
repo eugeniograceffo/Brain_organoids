@@ -1,0 +1,392 @@
+---
+title: 'EG15: Transcriptomics analysis'
+output:
+  html_document:
+    df_print: paged
+---
+
+
+```{r}
+## #load libraries
+library("DESeq2")
+library(tidyverse)
+library(ggrepel)
+library(dplyr)
+
+```
+
+```{r}
+### Load gene(/transcript) count matrix and labels
+
+countData <- as.matrix(read.csv("gene_count_matrix.csv", row.names="gene_id", check.names = FALSE))
+colData <- read.csv("Metadata_brain_organoids.csv",
+    sep=";",row.names="Sample")
+
+colData$study_day <-as.factor(colData$study_day)
+colData
+
+### Check all sample IDs in colData are also in CountData and match their orders
+all(rownames(colData) %in% colnames(countData))
+countData <- countData[, rownames(colData)]
+all(rownames(colData) == colnames(countData))
+
+```
+```{r}
+### Create a DESeqDataSet from count matrix and labels
+dds <- DESeqDataSetFromMatrix(countData = countData, 
+                                colData = colData, design =  ~ study_day + Treatment + study_day:Treatment)
+
+### pre-filtering to increase speed and reduce memory requirements
+keep <- rowSums(counts(dds)) >= 10
+dds <- dds[keep,]
+```
+```{r}
+###
+
+colData(dds)
+head( counts(dds), 5 )
+```
+
+```{r}
+#set the reference level
+dds$Treatment <- relevel(dds$Treatment, ref = "control")
+
+### run DESeq2 and calulate the results
+dds <- DESeq(dds)
+res <- results(dds)
+res
+
+```
+```{r}
+### Log fold change shrinkage for visualization and ranking
+resultsNames(dds)
+
+resLFC <- lfcShrink(dds, coef="Treatment_lower_THRA1_vs_higher_THRA1", type="apeglm")
+resLFC
+```
+```{r}
+### p-values and adjusted p-values
+resOrdered <- res[order(res$padj), ]
+summary(res)
+
+```
+
+```{r}
+### How many adjusted p-values were less than 0.05?
+sum(res$padj < 0.05, na.rm=TRUE)
+```
+
+```{r}
+plotDispEsts( dds )
+
+plotMA(resLFC, ylim=c(-10,10), alpha= 0.05, main= "MA plot with alpha=0.05")
+
+```
+
+```{r}
+### plotting the genecounts
+### normalizes counts by the estimated size factors (or normalization factors if these were used) and adds a pseudocount of 1/2 to allow for log scale plotting. 
+
+plotCounts(dds, gene="ENSG00000126351.13|THRA", intgroup="study_day")
+plotCounts(dds, gene="ENSG00000126351.13|THRA", intgroup=c("study_day","Treatment"))
+
+```
+```{r}
+### exporting the results
+resSig <- subset(resOrdered, padj < 0.05)
+resSig
+
+write.csv(as.data.frame(resSig), 
+          file="Low_THRA1_vs_high_as_ref_results.csv")
+```
+
+```{r}
+library("pheatmap")
+select <- order(rowMeans(counts(dds,normalized=TRUE)),
+                decreasing=TRUE)[1:20]
+df <- as.data.frame(colData(dds)[,c("study_day", "Treatment")])
+ntd <- normTransform(dds)
+pheatmap(assay(ntd)[select,], cluster_rows=FALSE, show_rownames=FALSE,
+         cluster_cols=T, annotation_col=df)
+```
+
+ 
+ Another use of the transformed data is sample clustering. Here, we apply the dist function to the transpose of the transformed count matrix to get sample-to-sample distances.
+ A heatmap of this distance matrix gives us an overview over similarities and dissimilarities between samples. We have to provide a hierarchical clustering hc to the heatmap function based on the sample distances, or else the heatmap function would calculate a clustering based on the distances between the rows/columns of the distance matrix.
+ 
+```{r}
+### clustering
+vsd <- vst(dds, blind=FALSE)
+sampleDists <- dist(t(assay(vsd)))
+
+library("RColorBrewer")
+library("plotly")
+sampleDistMatrix <- as.matrix(sampleDists)
+rownames(sampleDistMatrix) <- rownames(colData)
+colnames(sampleDistMatrix) <- NULL
+colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+heatmap <-pheatmap(sampleDistMatrix,
+         clustering_distance_rows=sampleDists,
+         clustering_distance_cols=sampleDists,
+         col=colors)
+
+heatmap
+ggsave( "Heatmap.pdf", plot=heatmap, width = 40, height = 25, units = "cm")
+
+ggsave("Heatmap.png" ,  plot=heatmap, device=png, dpi = 600, bg = "transparent", width = 20, height = 15, units = "cm" )
+
+```
+
+```{r}
+### PCA
+plotPCA(vsd, intgroup=c("Treatment"))
+
+plotPCA(vsd, intgroup=c("study_day"))
+
+pcaData <- plotPCA(vsd, intgroup=c("Treatment", "study_day", "hiPSC_line.line"), returnData=TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+
+ggplot(pcaData, aes(PC1, PC2, color=study_day, shape=Treatment)) +
+  geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed()+  
+   theme_light(base_size = 12)+
+  geom_text_repel(aes(label = hiPSC_line.line),
+                  box.padding   = 0.35, 
+                  point.padding = 0.5,
+                  segment.color = 'grey50',
+                  max.overlaps = 100)
+
+ggsave("PCA_final_labels.png" , device=png, dpi = 600, bg = "transparent", width = 20, height = 12, units = "cm" )
+
+ggplot(pcaData, aes(PC1, PC2, color=study_day)) +
+  geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed()+  
+   theme_light(base_size = 12)+
+  stat_ellipse()+ 
+  theme(legend.position=c(0.8, 0.83),
+        legend.background = element_rect(fill="white",
+                                  size=0.5, linetype="solid", 
+                                  colour ="grey"))
+
+
+ggsave("PCA_final_NO_labels.png" , device=png, dpi = 600, bg = "transparent", width = 20, height = 12, units = "cm" )
+
+
+pcaData <- separate(pcaData, name, "code", remove = FALSE )
+
+
+ggplot(pcaData, aes(PC1, PC2, color=study_day)) +
+  geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed()+  
+   theme_light(base_size = 12)+
+   geom_text_repel(aes(label = hiPSC_line.line))+
+  stat_ellipse()+  
+  theme(legend.position=c(0.8, 0.83),
+        legend.background = element_rect(fill="white",
+                                  size=0.5, linetype="solid", 
+                                  colour ="grey"))
+
+ggsave("PCA_final_short_labels.png" , device=png, dpi = 600, bg = "transparent", width = 20, height = 12, units = "cm" )
+
+
+
+
+
+
+
+
+```
+
+
+
+```{r}
+
+ggplot(pcaData, aes(PC1, PC2, color=study_day, shape=Treatment)) +
+  geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed()+
+  geom_text_repel(aes(label = hiPSC_line.line),
+                  box.padding   = 0.35, 
+                  point.padding = 0.5,
+                  segment.color = 'grey50') +
+    theme(legend.position="none")
+
+ggplotly()
+```
+
+
+```{r}
+# make screeplot
+    ## calculate the variance for each gene
+     rv <- rowVars(assay(vsd))
+
+     ## select the ntop genes by variance
+     select <- order(rv, decreasing=TRUE)[seq_len(min(500, length(rv)))]
+     
+     ## perform a PCA on the data in assay(x) for the selected genes
+     pca <- prcomp(t(assay(vsd)[select,]))
+     
+     ## the contribution to the total variance for each component
+     percentVar <- pca$sdev^2 / sum( pca$sdev^2 )*100
+     
+     ##plot the "percentVar"
+     scree_plot=data.frame(percentVar)
+     scree_plot[,2]<- c(1:16)
+
+     colnames(scree_plot)<-c("variance","component_number")
+     ggplot(scree_plot, mapping=aes(x=component_number, y=variance))+geom_bar(stat="identity")+
+         ggtitle("Scree plot") +
+      theme(legend.position = "right", plot.title = element_text(hjust=0.5)) + 
+       ylab("% Variance")
+```
+ 
+ 
+```{r}
+### P-values distribution
+## P-value histogram plot
+res.df <- data.frame(Feature = rownames(res.df), res.df)
+rownames(res.df) <- NULL
+GO_reference <- dplyr::filter(res.df, baseMean >0) %>%
+  dplyr::select(GeneID= Feature, baseMean="baseMean" ) %>%
+   drop_na() %>%
+  separate(GeneID, "ENSEMBL_ID", sep="\\.", remove=FALSE, extra="warn", fill="right") %>% #splits multiple IDs on same row and keeps the right "ENSEMBLID"
+  separate(GeneID, c("delete","Gene"), sep="\\|", remove=FALSE, extra="drop", fill="right")%>% #splits multiple IDs on same row and keeps the right
+  dplyr::select(ENSEMBL_ID)
+
+write.csv(GO_reference, 
+          file="GO_reference_list.csv", row.names=FALSE)
+
+
+## Sort results by adjusted p-values
+ord <- order(res.df$padj, decreasing = FALSE)
+res.df <- res.df[ord, ]
+res.df <- cbind(data.frame(Feature = rownames(res.df)), res.df)
+rownames(res.df) <- NULL
+
+## Adjusted p-values histogram plot
+ggplot(res.df[!is.na(res.df$padj), ], aes(x = padj)) +
+    geom_histogram(alpha=.5, position='identity', bins = 50) +
+    labs(title=paste('Histogram of', elementMetadata(res)$description[grep('adjusted', elementMetadata(res)$description)])) +
+    xlab('Adjusted p-values') +
+    xlim(c(0, 1.0005))
+```
+
+BiocManager::install("ReportingTools")
+citation("ReportingTools")
+https://bioconductor.org/packages/devel/bioc/vignettes/ReportingTools/inst/doc/rnaseqAnalysis.pdf
+
+```{r}
+library(ReportingTools)
+
+des2Report <- HTMLReport(shortName = 'RNAseq_analysis_with_DESeq2_P0.1',
+title = 'RNA-seq analysis of differential expression: Tissues expressing high vs low THRA',
+reportDirectory = "./reports")
+
+publish(dds,des2Report, pvalueCutoff=0.1,
+annotation.db="org.Mm.eg.db", factor = colData(dds)$Treatment,
+reportDir="./reports")
+finish(des2Report)
+
+
+```
+
+
+```{r}
+# Volcano Plot of results
+library(EnhancedVolcano)
+#library("biomaRt")
+#ensembl <- useMart("ensembl",dataset="hsapiens_gene_ensembl") #retrieves human database GRCh38.p13
+#ensembl_gene_names <- getBM(mart=ensembl, attributes = c("ensembl_gene_id", "external_gene_name"), filters = "chromosome_name", values=1:22)
+
+#ensembl_gene_names <- ensembl_gene_names %>%
+ #  rename(ENSEMBL_ID=ensembl_gene_id, Gene=external_gene_name)
+
+#Volcano_list <- dplyr::select(res.df, GeneID= Feature, FDR="padj", Log2FoldChange="log2FoldChange" ) %>%
+ #  drop_na() %>%
+  #separate(GeneID, "ENSEMBL_ID", sep="\\.", remove=FALSE, extra="warn", fill="right") %>% #splits multiple IDs on same row and keeps the right "ENSEMBLID"
+  #group_by(GeneID) %>%
+   #arrange(FDR, .by_group=T) %>% #groups by Gene name and sorts them by FDR
+   #top_n(-1, FDR) %>% # selects for each gene the one with lowest FDR
+   #distinct()
+
+
+Volcano_list_genes <- Volcano_list %>%
+  separate(GeneID, c("delete","Gene"), sep="\\|", remove=FALSE, extra="drop", fill="right")%>% #splits multiple IDs on same row and keeps the right
+  dplyr::select(-delete)
+  
+Volcano_list_labels <- dplyr::filter(Volcano_list_genes, FDR<0.05)
+write.csv(as.data.frame(Volcano_list_labels), 
+          file="Significant_genes_results_0.05.csv")
+
+
+FC <- 0.5
+p <- 0.05
+
+keyvals <- rep('grey75', nrow(Volcano_list_genes))
+names(keyvals) <- rep('Not Significant', nrow(Volcano_list_genes))
+
+#keyvals[which(abs(Volcano_list$Log2FoldChange) > FC & Volcano_list$FDR > p)] <- 'grey50'
+#names(keyvals)[which(abs(Volcano_list$Log2FoldChange) > FC & Volcano_list$FDR > p)] <- 'Log2FoldChange'
+
+#keyvals[which(abs(Volcano_list$Log2FoldChange) < FC & Volcano_list$FDR < p)] <- 'grey25'
+#names(keyvals)[which(abs(Volcano_list$Log2FoldChange)  < FC & Volcano_list$FDR < p)] <- '-Log10Q'
+
+keyvals[which(Volcano_list_genes$Log2FoldChange < -FC & Volcano_list_genes$FDR < p)] <- 'blue2'
+names(keyvals)[which(Volcano_list_genes$Log2FoldChange  < -FC & Volcano_list_genes$FDR < p)] <- 'Down-regulated'
+
+keyvals[which(Volcano_list_genes$Log2FoldChange > FC & Volcano_list_genes$FDR < p)] <- 'red2'
+names(keyvals)[which(Volcano_list_genes$Log2FoldChange > FC & Volcano_list_genes$FDR < p)] <- 'Up-regulated'
+
+unique(keyvals)
+unique(names(keyvals))
+
+
+volcano_plot <- EnhancedVolcano(Volcano_list_genes,
+    lab = Volcano_list_genes$Gene,
+    x = 'Log2FoldChange',
+    y = 'FDR',
+    #selectLab = GBA_final_list$gene ,
+    #selectLab = c('ENSG00000153113','ENSG00000142192', 'ENSG00000168002', 'ENSG00000087460', 'ENSG00000148935', 'ENSG00000138162'), #for specific genes 
+    pCutoff = 0.05,
+    FCcutoff = 0.5,
+    xlim = c(-5.5, 5.5),
+    ylim = c(0, -log10(10e-12)),
+    colCustom = keyvals,
+    xlab = bquote(~Log[2]~ 'fold change'),
+    ylab = bquote(~-Log[10] ~ italic(Padj)),
+    pointSize = 2.5,
+    #labSize = 3.0,
+    #shape = c(6, 6, 19, 16),
+    title = "Expression pattern of tissues expressing less THRA1",
+    subtitle = "Differential Expression Analysis, High THRA1 expressing tissues as reference",
+    caption = "Fold Change cutoff = 0.5; Padj (FDR) cutoff = 0.05",
+    #legend=c('NS','Log (base 2) fold-change','P value', 'P value & Log (base 2) fold-change'),
+    #legend=c('','','P value', 'P value & Log (base 2) fold-change'),
+    legendPosition = "right",
+    legendLabSize = 15,
+    legendIconSize = 10,
+    col = c("grey30", "grey30", "royalblue", "red2"),
+    colAlpha = 0.8,
+    drawConnectors = TRUE,
+    widthConnectors = 0.6,
+    colConnectors = 'grey50',
+    boxedLabels=T,labSize =3)
+   # hline = c(10e-8), #adds cutoff lines
+
+volcano_plot
+
+
+ggsave("Volcano_plot.pdf", width = 40, height = 25, units = "cm")
+```
+
+
+
+
+

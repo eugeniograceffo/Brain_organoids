@@ -64,7 +64,7 @@ res
 ### Log fold change shrinkage for visualization and ranking
 resultsNames(dds)
 
-resLFC <- lfcShrink(dds, coef="Treatment_lower_THRA1_vs_higher_THRA1", type="apeglm")
+resLFC <- lfcShrink(dds, coef="Treatment_T3_pulse_vs_control", type="apeglm")
 resLFC
 ```
 ```{r}
@@ -72,17 +72,23 @@ resLFC
 resOrdered <- res[order(res$padj), ]
 summary(res)
 
+summary(resLFC)
 ```
 
 ```{r}
 ### How many adjusted p-values were less than 0.05?
 sum(res$padj < 0.05, na.rm=TRUE)
+
+### How many adjusted p-values were less than 0.05?
+sum(resLFC$padj < 0.05, na.rm=TRUE)
 ```
 
 ```{r}
 plotDispEsts( dds )
 
 plotMA(resLFC, ylim=c(-10,10), alpha= 0.05, main= "MA plot with alpha=0.05")
+
+ggsave("MA_plot.png" , device=png, dpi = 600, path = figures_path, bg = "transparent", width = 20, height = 12, units = "cm" )
 
 ```
 
@@ -99,11 +105,11 @@ plotCounts(dds, gene="ENSG00000111640.15|GAPDH", intgroup=c("study_day","Treatme
 ```
 ```{r}
 ### exporting the results
-resSig <- subset(resOrdered, padj < 0.05)
+resSig <- subset(resLFC, padj < 0.05)
 resSig
 
 write.csv(as.data.frame(resSig), 
-          file="Low_THRA1_vs_high_as_ref_results.csv")
+          file="T3_vs_control_results.csv")
 ```
 
 ```{r}
@@ -347,20 +353,21 @@ finish(des2Report)
 ```{r}
 # Volcano Plot of results
 library(EnhancedVolcano)
-#library("biomaRt")
+library("biomaRt")
 #ensembl <- useMart("ensembl",dataset="hsapiens_gene_ensembl") #retrieves human database GRCh38.p13
 #ensembl_gene_names <- getBM(mart=ensembl, attributes = c("ensembl_gene_id", "external_gene_name"), filters = "chromosome_name", values=1:22)
 
 #ensembl_gene_names <- ensembl_gene_names %>%
- #  rename(ENSEMBL_ID=ensembl_gene_id, Gene=external_gene_name)
+   rename(ENSEMBL_ID=ensembl_gene_id, Gene=external_gene_name)
 
-#Volcano_list <- dplyr::select(res.df, GeneID= Feature, FDR="padj", Log2FoldChange="log2FoldChange" ) %>%
- #  drop_na() %>%
-  #separate(GeneID, "ENSEMBL_ID", sep="\\.", remove=FALSE, extra="warn", fill="right") %>% #splits multiple IDs on same row and keeps the right "ENSEMBLID"
-  #group_by(GeneID) %>%
-   #arrange(FDR, .by_group=T) %>% #groups by Gene name and sorts them by FDR
-   #top_n(-1, FDR) %>% # selects for each gene the one with lowest FDR
-   #distinct()
+
+Volcano_list <- data.frame(GeneID=resLFC@rownames, FDR=resLFC@listData[["padj"]], log2fold_change=resLFC@listData[["log2FoldChange"]]) %>%
+   drop_na() %>%
+  separate(GeneID, "ENSEMBL_ID", sep="\\.", remove=FALSE, extra="warn", fill="right") %>% #splits multiple IDs on same row and keeps the right "ENSEMBLID"
+   group_by(GeneID) %>%
+   arrange(FDR, .by_group=T) %>% #groups by Gene name and sorts them by FDR
+   top_n(-1, FDR) %>% # selects for each gene the one with lowest FDR
+   distinct()
 
 
 Volcano_list_genes <- Volcano_list %>%
@@ -369,7 +376,7 @@ Volcano_list_genes <- Volcano_list %>%
   
 Volcano_list_labels <- dplyr::filter(Volcano_list_genes, FDR<0.05)
 write.csv(as.data.frame(Volcano_list_labels), 
-          file="Significant_genes_results_0.05.csv")
+          file="Significant_genes_results_0.05_T3_vs_control.csv")
 
 
 FC <- 0.5
@@ -384,11 +391,11 @@ names(keyvals) <- rep('Not Significant', nrow(Volcano_list_genes))
 #keyvals[which(abs(Volcano_list$Log2FoldChange) < FC & Volcano_list$FDR < p)] <- 'grey25'
 #names(keyvals)[which(abs(Volcano_list$Log2FoldChange)  < FC & Volcano_list$FDR < p)] <- '-Log10Q'
 
-keyvals[which(Volcano_list_genes$Log2FoldChange < -FC & Volcano_list_genes$FDR < p)] <- 'blue2'
-names(keyvals)[which(Volcano_list_genes$Log2FoldChange  < -FC & Volcano_list_genes$FDR < p)] <- 'Down-regulated'
+keyvals[which(Volcano_list_genes$log2fold_change < -FC & Volcano_list_genes$FDR < p)] <- 'blue2'
+names(keyvals)[which(Volcano_list_genes$log2fold_change  < -FC & Volcano_list_genes$FDR < p)] <- 'Down-regulated'
 
-keyvals[which(Volcano_list_genes$Log2FoldChange > FC & Volcano_list_genes$FDR < p)] <- 'red2'
-names(keyvals)[which(Volcano_list_genes$Log2FoldChange > FC & Volcano_list_genes$FDR < p)] <- 'Up-regulated'
+keyvals[which(Volcano_list_genes$log2fold_change > FC & Volcano_list_genes$FDR < p)] <- 'red2'
+names(keyvals)[which(Volcano_list_genes$log2fold_change > FC & Volcano_list_genes$FDR < p)] <- 'Up-regulated'
 
 unique(keyvals)
 unique(names(keyvals))
@@ -396,7 +403,7 @@ unique(names(keyvals))
 
 volcano_plot <- EnhancedVolcano(Volcano_list_genes,
     lab = Volcano_list_genes$Gene,
-    x = 'Log2FoldChange',
+    x = 'log2fold_change',
     y = 'FDR',
     #selectLab = GBA_final_list$gene ,
     #selectLab = c('ENSG00000153113','ENSG00000142192', 'ENSG00000168002', 'ENSG00000087460', 'ENSG00000148935', 'ENSG00000138162'), #for specific genes 
@@ -429,7 +436,7 @@ volcano_plot <- EnhancedVolcano(Volcano_list_genes,
 volcano_plot
 
 
-ggsave("Volcano_plot.pdf", width = 40, height = 25, units = "cm")
+ggsave("Volcano_plot_T3_vs_control.png" , device=png, dpi = 600, path = figures_path, bg = "transparent", width = 35, height = 20, units = "cm" )
 ```
 
 

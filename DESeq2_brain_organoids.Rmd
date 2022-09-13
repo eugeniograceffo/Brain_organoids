@@ -439,6 +439,142 @@ volcano_plot
 ggsave("Volcano_plot_T3_vs_control.png" , device=png, dpi = 600, path = figures_path, bg = "transparent", width = 35, height = 20, units = "cm" )
 ```
 
+```{r}
+### we want a list of the DE genes between T3 vs control for each time point
+### to do this, I will subset the dds element and run DESeq
+### day 26
+
+dds_day26 <- subset(dds, select=colData(dds)$study_day=="26")
+
+design(dds_day26) = formula(~Treatment)
+dds_day26
+
+colData(dds_day26)
+head( counts(dds_day26), 5 )
+
+#set the reference level
+dds_day26$Treatment <- relevel(dds_day26$Treatment, ref = "control")
+
+
+### run DESeq2 and calulate the results
+dds_day26 <- DESeq(dds_day26)
+res_day26 <- results(dds_day26)
+res_day26
+
+### p-values and adjusted p-values
+resOrdered_day26 <- res_day26[order(res_day26$padj), ]
+summary(res_day26)
+
+### How many adjusted p-values were less than 0.05?
+sum(res_day26$padj < 0.05, na.rm=TRUE)
+
+### exporting the results
+resSig_day26 <- subset(res_day26, padj < 0.05)
+resSig_day26
+
+write.csv(as.data.frame(resSig_day26), 
+          file="T3_vs_control_results_day26.csv")
+
+```
+
+
+
+```{r}
+### day 46
+
+dds_day46 <- subset(dds, select=colData(dds)$study_day=="46")
+
+design(dds_day46) = formula(~Treatment)
+dds_day46
+
+colData(dds_day46)
+head( counts(dds_day46), 5 )
+
+#set the reference level
+dds_day46$Treatment <- relevel(dds_day46$Treatment, ref = "control")
+
+
+### run DESeq2 and calulate the results
+dds_day46 <- DESeq(dds_day46)
+res_day46 <- results(dds_day46)
+res_day46
+
+### p-values and adjusted p-values
+resOrdered_day46 <- res_day46[order(res_day46$padj), ]
+summary(res_day46)
+
+### How many adjusted p-values were less than 0.05?
+sum(res_day46$padj < 0.05, na.rm=TRUE)
+
+### exporting the results
+resSig_day46 <- subset(res_day46, padj < 0.05)
+resSig_day46
+
+write.csv(as.data.frame(resSig_day46), 
+          file="T3_vs_control_results_day46.csv")
+
+```
+
+```{r}
+### day 61
+
+dds_day61 <- subset(dds, select=colData(dds)$study_day=="61")
+
+design(dds_day61) = formula(~Treatment)
+dds_day61
+
+colData(dds_day61)
+head( counts(dds_day61), 5 )
+
+#set the reference level
+dds_day61$Treatment <- relevel(dds_day61$Treatment, ref = "control")
+
+
+### run DESeq2 and calulate the results
+dds_day61 <- DESeq(dds_day61)
+res_day61 <- results(dds_day61)
+res_day61
+
+### p-values and adjusted p-values
+resOrdered_day61 <- res_day61[order(res_day61$padj), ]
+summary(res_day61)
+
+### How many adjusted p-values were less than 0.05?
+sum(res_day61$padj < 0.05, na.rm=TRUE)
+
+### exporting the results
+resSig_day61 <- subset(res_day61, padj < 0.05)
+resSig_day61
+
+write.csv(as.data.frame(resSig_day61), 
+          file="T3_vs_control_results_day61.csv")
+
+```
+
+```{r}
+### one T3 treated sample in day 26 is an outlier. I will select all the genes that are DE in both day 46 AND 61, plus the 11 genes that were significant at day 26
+
+df_day26 <- as.data.frame(resSig_day26) %>%
+  mutate("Gene"=rownames(resSig_day26)) %>%
+  select(Gene,"log2FoldChange_day26"= log2FoldChange, "FDR_day26" = padj )
+
+df_day46 <- as.data.frame(resSig_day46) %>%
+  mutate("Gene"=rownames(resSig_day46)) %>%
+  select(Gene,"log2FoldChange_day46"= log2FoldChange, "FDR_day46" = padj )
+
+df_day61 <- as.data.frame(resSig_day61) %>%
+  mutate("Gene"=rownames(resSig_day61)) %>%
+  select(Gene,"log2FoldChange_day61"= log2FoldChange, "FDR_day61" = padj )
+
+DE_genes <- inner_join(df_day46, df_day61, by="Gene") %>%
+  full_join(df_day26) %>%
+  separate(Gene, c("ENSEMBL_ID","Gene"), sep="\\|", remove=TRUE, extra="drop", fill="right")
+
+DE_genes
+
+write.csv(DE_genes,  file="T3_vs_control_results_independent.csv")
+```
+
 
 
 

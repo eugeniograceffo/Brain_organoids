@@ -358,7 +358,7 @@ library("biomaRt")
 #ensembl_gene_names <- getBM(mart=ensembl, attributes = c("ensembl_gene_id", "external_gene_name"), filters = "chromosome_name", values=1:22)
 
 #ensembl_gene_names <- ensembl_gene_names %>%
-   rename(ENSEMBL_ID=ensembl_gene_id, Gene=external_gene_name)
+  # rename(ENSEMBL_ID=ensembl_gene_id, Gene=external_gene_name)
 
 
 Volcano_list <- data.frame(GeneID=resLFC@rownames, FDR=resLFC@listData[["padj"]], log2fold_change=resLFC@listData[["log2FoldChange"]]) %>%
@@ -616,6 +616,132 @@ write.csv(df_day46_and_61,
 
 ```
 
+```{r}
+# Volcano Plot of results of day46 and day61 together (466 genes)
+library(EnhancedVolcano)
+
+Volcano_list_day46_day61_together <- data.frame(GeneID=res_day46_and_61@rownames, FDR=res_day46_and_61@listData[["padj"]], log2fold_change=res_day46_and_61@listData[["log2FoldChange"]]) %>%
+   drop_na() %>%
+  separate(GeneID, c("ENSEMBL_ID","Gene"), sep="\\|", remove=TRUE, extra="drop", fill="right") %>%
+   group_by(ENSEMBL_ID) %>%
+   arrange(FDR, .by_group=T) %>% #groups by Gene name and sorts them by FDR
+   top_n(-1, FDR) %>% # selects for each gene the one with lowest FDR
+   distinct()
+
+FC <- 0.5
+p <- 0.05
+
+keyvals <- rep('grey75', nrow(Volcano_list_day46_day61_together))
+names(keyvals) <- rep('Not Significant', nrow(Volcano_list_day46_day61_together))
 
 
+keyvals[which(Volcano_list_day46_day61_together$log2fold_change < -FC & Volcano_list_day46_day61_together$FDR < p)] <- 'blue2'
+names(keyvals)[which(Volcano_list_day46_day61_together$log2fold_change  < -FC & Volcano_list_day46_day61_together$FDR < p)] <- 'Down-regulated'
+
+keyvals[which(Volcano_list_day46_day61_together$log2fold_change > FC & Volcano_list_day46_day61_together$FDR < p)] <- 'red2'
+names(keyvals)[which(Volcano_list_day46_day61_together$log2fold_change > FC & Volcano_list_day46_day61_together$FDR < p)] <- 'Up-regulated'
+
+unique(keyvals)
+unique(names(keyvals))
+
+
+volcano_plot <- EnhancedVolcano(Volcano_list_day46_day61_together,
+    lab = Volcano_list_day46_day61_together$Gene,
+    x = 'log2fold_change',
+    y = 'FDR',
+    #selectLab = GBA_final_list$gene ,
+    #selectLab = c('ENSG00000153113','ENSG00000142192', 'ENSG00000168002', 'ENSG00000087460', 'ENSG00000148935', 'ENSG00000138162'), #for specific genes 
+    pCutoff = 0.05,
+    FCcutoff = 0.5,
+    xlim = c(-8, 8),
+    ylim = c(0, -log10(10e-70)),  #check that it contains all the genes
+    colCustom = keyvals,
+    xlab = bquote(~Log[2]~ 'fold change'),
+    ylab = bquote(~-Log[10] ~ italic(Padj)),
+    pointSize = 2.5,
+    #labSize = 3.0,
+    #shape = c(6, 6, 19, 16),
+    title = "Differentially Expressed Genes - day46 and day61 in one dds object",
+    subtitle = paste0("Total of ",as.character(count(df_day46_and_61)), " significant genes"),
+    caption = "Fold Change cutoff = 0.5; Padj (FDR) cutoff = 0.05",
+    legendPosition = "right",
+    legendLabSize = 15,
+    legendIconSize = 10,
+    col = c("grey30", "grey30", "royalblue", "red2"),
+    colAlpha = 0.8,
+    drawConnectors = TRUE,
+    widthConnectors = 0.6,
+    colConnectors = 'grey50',
+    boxedLabels=T,labSize =3)
+
+volcano_plot
+
+
+ggsave("Volcano_plot_T3_vs_control_day46_day61_together.png" , device=png, dpi = 600, path = figures_path, bg = "transparent", width = 35, height = 20, units = "cm" )
+```
+
+
+```{r}
+# Volcano Plot of results of day46 and day61 independently (138 genes)
+library(EnhancedVolcano)
+
+Volcano_list_day46_day61_independent <- data.frame(GeneID=res_day46@rownames, FDR=res_day46@listData[["padj"]], log2fold_change=res_day46@listData[["log2FoldChange"]]) %>%
+   drop_na() %>%
+  separate(GeneID, c("ENSEMBL_ID","Gene"), sep="\\|", remove=TRUE, extra="drop", fill="right") %>%
+   group_by(ENSEMBL_ID) %>%
+   arrange(FDR, .by_group=T) %>% #groups by Gene name and sorts them by FDR
+   top_n(-1, FDR) %>% # selects for each gene the one with lowest FDR
+   distinct()
+
+FC <- 0.5
+p <- 0.05
+
+keyvals <- rep('grey75', nrow(Volcano_list_day46_day61_independent))
+names(keyvals) <- rep('Not Significant', nrow(Volcano_list_day46_day61_independent))
+
+
+keyvals[which(Volcano_list_day46_day61_independent$log2fold_change < -FC & Volcano_list_day46_day61_independent$FDR < p)] <- 'blue2'
+names(keyvals)[which(Volcano_list_day46_day61_independent$log2fold_change  < -FC & Volcano_list_day46_day61_independent$FDR < p)] <- 'Down-regulated'
+
+keyvals[which(Volcano_list_day46_day61_independent$log2fold_change > FC & Volcano_list_day46_day61_independent$FDR < p)] <- 'red2'
+names(keyvals)[which(Volcano_list_day46_day61_independent$log2fold_change > FC & Volcano_list_day46_day61_independent$FDR < p)] <- 'Up-regulated'
+
+unique(keyvals)
+unique(names(keyvals))
+
+
+volcano_plot <- EnhancedVolcano(Volcano_list_day46_day61_independent,
+    lab = Volcano_list_day46_day61_independent$Gene,
+    x = 'log2fold_change',
+    y = 'FDR',
+    #selectLab = GBA_final_list$gene ,
+    #selectLab = c('ENSG00000153113','ENSG00000142192', 'ENSG00000168002', 'ENSG00000087460', 'ENSG00000148935', 'ENSG00000138162'), #for specific genes 
+    pCutoff = 0.05,
+    FCcutoff = 0.5,
+    xlim = c(-10, 10),
+    ylim = c(0, -log10(10e-120)),
+    colCustom = keyvals,
+    xlab = bquote(~Log[2]~ 'fold change'),
+    ylab = bquote(~-Log[10] ~ italic(Padj)),
+    pointSize = 2.5,
+    #labSize = 3.0,
+    #shape = c(6, 6, 19, 16),
+    title = "Differentially Expressed Genes - day46 and day61 processed independently",
+    subtitle = paste0("Total of ",as.character(count(DE_genes)), " significant genes"),
+    caption = "Fold Change cutoff = 0.5; Padj (FDR) cutoff = 0.05",
+    legendPosition = "right",
+    legendLabSize = 15,
+    legendIconSize = 10,
+    col = c("grey30", "grey30", "royalblue", "red2"),
+    colAlpha = 0.8,
+    drawConnectors = TRUE,
+    widthConnectors = 0.6,
+    colConnectors = 'grey50',
+    boxedLabels=T,labSize =3)
+
+volcano_plot
+
+
+ggsave("Volcano_plot_T3_vs_control_day46_day61_independent.png" , device=png, dpi = 600, path = figures_path, bg = "transparent", width = 35, height = 20, units = "cm" )
+```
 

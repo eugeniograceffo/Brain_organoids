@@ -620,8 +620,8 @@ df_day46_and_61 <- as.data.frame(resSig_day46_and_61) %>%
    separate(ENSEMBL_ID, c("ENSEMBL_ID", "delete"), sep="\\.", remove=FALSE, extra="warn", fill="right") %>%
   select(-delete) %>%
    group_by(ENSEMBL_ID) %>%
-   arrange(FDR_day46, .by_group=T) %>% #groups by Gene name and sorts them by FDR
-   top_n(-1, FDR_day46) %>% # selects for each gene the one with lowest FDR
+   arrange(FDR_day46_day61, .by_group=T) %>% #groups by Gene name and sorts them by FDR
+   top_n(-1, FDR_day46_day61) %>% # selects for each gene the one with lowest FDR
    distinct()
 
 

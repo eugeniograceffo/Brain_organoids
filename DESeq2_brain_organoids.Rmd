@@ -758,4 +758,10 @@ volcano_plot
 
 ggsave("Volcano_plot_T3_vs_control_day46_day61_independent.png" , device=png, dpi = 600, path = figures_path, bg = "transparent", width = 35, height = 20, units = "cm" )
 ```
+```{r}
+### pcaExplorer for data exploration
+library("pcaExplorer")
+pcaExplorer(dds = dds_day46_and_61)
+
+```
 

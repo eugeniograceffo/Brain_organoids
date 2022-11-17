@@ -22,6 +22,7 @@ library(ggrepel)
 library(scales)
 library(readxl)
 library(dplyr)
+library(ggpubr)
 
 ```
 
@@ -127,7 +128,7 @@ total_plot <- pivot_longer(total_plot, c("THRA1","THRA2"), names_to = "Isoform",
 
 ggplot(total_plot, aes(x=study_day, y=Expression, label=Isoform)) + 
   geom_bar(stat='summary', position = "stack", aes(fill=Isoform), width=.5)  +
-   theme_light(base_size = 12)+
+   theme_light(base_size = 14)+
   scale_y_continuous("Read counts") +
   scale_fill_manual(name="Isoform", 
                     labels = c( "THRA1", "THRA2"), 
@@ -147,19 +148,43 @@ ggsave("THRA1_THRA2_mosdepth_over_time_control.png" , device=png, dpi = 600, pat
 ### Plot of Control vs T3 pulse over time - THRA
 graph_data <- select(dataset_final, Sample,study_day,Treatment,  THRA1, THRA2, THRA, hiPSC_line)
 
+### Let´s calculate the group summaries
 
-ggplot(graph_data, aes(x = study_day, y = THRA, color = Treatment)) +
-  geom_boxplot(position=position_dodge(width=0.8)) +
-  geom_point(position=position_dodge(width=0.8))+
- # geom_line(aes(group=hiPSC_line)) +
-  scale_y_continuous("Normalized read counts") +
-  scale_color_manual("", values = c("control" = "#5A7C86", "T3_pulse"="#E98A33")) +
-    labs(subtitle="Read counts calculated with Mosdepth", 
+
+
+dataset_stats <- graph_data %>%
+  group_by(study_day, Treatment) %>%
+  mutate(THRA_mean = mean(THRA)) %>%
+  mutate(THRA_SD = sd(THRA)) %>%
+  mutate(THRA1_mean = mean(THRA1)) %>%
+  mutate(THRA1_SD = sd(THRA1)) %>%
+  mutate(THRA2_mean = mean(THRA2)) %>%
+  mutate(THRA2_SD = sd(THRA2)) %>%
+  select(-Sample, -hiPSC_line, -THRA, -THRA1, -THRA2)
+
+dataset_stats
+
+
+
+compare_means(THRA ~ Treatment, data = graph_data, 
+              group.by = "study_day")
+
+compare_means(THRA2 ~ Treatment,  data = graph_data, method = "anova")
+
+
+
+
+ggbarplot(graph_data, x = "study_day", y = "THRA", add = "mean_se",
+          fill = "Treatment",
+          position = position_dodge(0.8)) +
+  scale_fill_manual("", values = c("control" = "#31092D", "T3_pulse"="#E98A33")) +
+  stat_compare_means(aes(group = Treatment), label = "p.signif", label.y = c(80, 220, 255)) +
+  labs(subtitle="Read counts calculated with Mosdepth", 
        title= "THRA expression of Cntrl vs T3 treatment over time",
-       caption = "~78M uniquely mapped reads, n>=2")+
-  theme_light(base_size = 12) +
-  scale_x_discrete() 
-
+       caption = "Wilcoxon test, n>=2\n ~78M uniquely mapped reads") +
+  scale_y_continuous("Normalized read counts") +
+  theme(legend.position='right')+
+  theme_light(base_size = 14)
 
 ## save plot
 ggsave("Treatment_barchart_over_time_THRA.png" , device=png, dpi = 600, path = path_plots, bg = "transparent", width = 20, height = 15, units = "cm" )
@@ -169,17 +194,19 @@ ggsave("Treatment_barchart_over_time_THRA.png" , device=png, dpi = 600, path = p
 
 ```{r}
 ### Plot of Control vs T3 pulse over time - THRA1
-ggplot(graph_data, aes(x = study_day, y = THRA1, color = Treatment)) +
-  geom_boxplot(position=position_dodge(width=0.8)) +
-  geom_point(position=position_dodge(width=0.8))+
- # geom_line(aes(group=hiPSC_line)) +
-  scale_y_continuous("Read counts") +
-  scale_color_manual("", values = c("control" = "#5A7C86", "T3_pulse"="#E98A33")) +
-    labs(subtitle="Read counts calculated with Mosdepth", 
+
+ggbarplot(graph_data, x = "study_day", y = "THRA1", add = "mean_se",
+          fill = "Treatment",
+          position = position_dodge(0.8)) +
+  scale_fill_manual("", values = c("control" = "#31092D", "T3_pulse"="#E98A33")) +
+  stat_compare_means(aes(group = Treatment), label = "p.signif", label.y = c(300, 850, 800)) +
+  labs(subtitle="Read counts calculated with Mosdepth", 
        title= "THRA1 expression of Cntrl vs T3 treatment over time",
-       caption = "~78M uniquely mapped reads, n>=2")+
-  theme_light(base_size = 12) +
-  scale_x_discrete() 
+       caption = "Wilcoxon test, n>=2\n ~78M uniquely mapped reads") +
+  scale_y_continuous("Normalized read counts") +
+  theme(legend.position='right')+
+  theme_light(base_size = 14)
+
 
 
 ## save plot
@@ -189,17 +216,18 @@ ggsave("Treatment_barchart_over_time_THRA1.png" , device=png, dpi = 600, path = 
 
 ```{r}
 ### Plot of Control vs T3 pulse over time - THRA2
-ggplot(graph_data, aes(x = study_day, y = THRA2, color = Treatment)) +
-  geom_boxplot(position=position_dodge(width=0.8)) +
-  geom_point(position=position_dodge(width=0.8))+
- # geom_line(aes(group=hiPSC_line)) +
-  scale_y_continuous("Read counts") +
-  scale_color_manual("", values = c("control" = "#5A7C86", "T3_pulse"="#E98A33")) +
-    labs(subtitle="Read counts calculated with Mosdepth", 
+ggbarplot(graph_data, x = "study_day", y = "THRA2", add = "mean_se",
+          fill = "Treatment",
+          position = position_dodge(0.8)) +
+  scale_fill_manual("", values = c("control" = "#31092D", "T3_pulse"="#E98A33")) +
+  stat_compare_means(aes(group = Treatment), label = "p.signif", label.y = c(800, 1600, 2100)) +
+  labs(subtitle="Read counts calculated with Mosdepth", 
        title= "THRA2 expression of Cntrl vs T3 treatment over time",
-       caption = "~78M uniquely mapped reads, n>=2")+
-  theme_light(base_size = 12) +
-  scale_x_discrete() 
+       caption = "Wilcoxon test, n>=2\n ~78M uniquely mapped reads") +
+  scale_y_continuous("Normalized read counts") +
+  theme(legend.position='right') +
+  theme_light(base_size = 14)
+
 
 
 ## save plot
